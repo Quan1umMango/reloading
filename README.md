@@ -2,7 +2,8 @@
 > [!WARNING]
 > This project is still in development
 
-[![Watch the video]](https://github.com/Quan1umMango/hotreloading/raw/main/preview.mp4)
+https://github.com/user-attachments/assets/da507856-0df3-48cc-be3e-52fe2f307e04
+
 
 A (currently) bare-bones implementation of a hot-reloading system in C.
 
