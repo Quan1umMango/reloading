@@ -4,6 +4,7 @@
 
 https://github.com/user-attachments/assets/da507856-0df3-48cc-be3e-52fe2f307e04
 
+https://github.com/user-attachments/assets/6244dce8-5587-4f71-9ae3-520954349c8e
 
 A (currently) bare-bones implementation of a hot-reloading system in C.
 
@@ -25,7 +26,7 @@ Then you can change and save the ``<example name>.c`` file and watch it auto rel
 - Define a function ``void hr_before_reload(void* state)``. This will be called before every reload and after every recompilation (optional)
 
 ## TODOS
-- [-] Raylib example
+- [x] Raylib example
 - [ ] Watch over directories
 - [ ] Watch over multiple files
 - [ ] Add option for custom build commands
