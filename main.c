@@ -10,14 +10,13 @@
 #include<libgen.h>
 #include<pthread.h>
 #include<stdatomic.h>
+#include<sys/param.h>
 
-pthread_mutex_t keep_exec_mutex = PTHREAD_MUTEX_INITIALIZER;
 atomic_bool keep_exec_b = false; 
-
 
 typedef void (*hr_main_t)(void*);
 typedef void (*hr_setup_t)(void*);
-typedef void (*hr_before_reload_t)(void*);
+typedef void (*hr_before_recomp_t)(void*);
 
 #define FATAL(msg,...) do { printf("[FATAL ERROR] "); printf(msg,##__VA_ARGS__); printf("\n"); exit(0); } while(0)
 
@@ -43,7 +42,6 @@ void* hr_main_loop(void* params) {
 	hr_main_t f = p->fn_ptr;
 	_Atomic void* state = p->state;
 	f(state);
-	free(params);
 	return NULL;
 }
 
@@ -51,28 +49,6 @@ struct ReloadAndExecParams {
 	void* handle;
 	void* state;
 };
-
-void* reload_and_exec(void* params) {
-	struct ReloadAndExecParams p = *(struct ReloadAndExecParams*)params;
-	void* handle = p.handle;
-	void* state = p.state;
-	do{
-		if(atomic_load(&keep_exec_b)) continue;
-
-		if(handle != NULL) {
-			hr_before_reload_t before_reload = dlsym(handle,"hr_before_reload");
-			if(before_reload) {
-				INFO("Found and running 'hr_before_reload'");
-				before_reload(state);
-			}else {
-				INFO("Did not find 'hr_before_reload'");
-			}
-			INFO("Waiting for thread to finish");
-			break;
-		}
-	}while(true);
-
-}
 
 void* keep_exec(void* exec_path_) {
 	char* exec_path = exec_path_;
@@ -96,14 +72,14 @@ void* keep_exec(void* exec_path_) {
 		state_size = *state_size_ptr;
 	}
 
-	INFO("Trying to reallocate state of size %d",state_size);
+	INFO("Trying to allocate state of size %d",state_size);
 	void* new_state = malloc(state_size);
 	free(state);
 	state = new_state;
 	if(new_state == NULL) {
 		FATAL("Reallocing state failed");
 	}
-	INFO("Successfully reallocated state");
+	INFO("Successfully allocated state");
 
 	hr_setup_t setup_fn = dlsym(handle,"hr_setup");
 	if(setup_fn == NULL) {
@@ -121,14 +97,17 @@ void* keep_exec(void* exec_path_) {
 
 
 		if(handle != NULL) {
-			hr_before_reload_t before_reload = dlsym(handle,"hr_before_reload");
-			if(before_reload) {
-				INFO("Found and running 'hr_before_reload'");
-				before_reload(state);
-			}else {
-				INFO("Did not find 'hr_before_reload'");
-			}
 			INFO("Waiting for thread to finish");
+			
+			hr_before_recomp_t before_recomp = dlsym(handle,"hr_before_recomp");
+			if(before_recomp) {
+				INFO("Found and running 'hr_before_recomp'");
+				before_recomp(state);
+			}else {
+				INFO("Did not find 'hr_before_recomp'");
+			}
+			
+
 			pthread_cancel(hr_main_thread);
 			pthread_join(hr_main_thread,NULL);
 
@@ -151,16 +130,29 @@ void* keep_exec(void* exec_path_) {
 
 		INFO("Trying to reallocate state");
 		void* new_state = malloc(state_size);
-		memcpy(new_state, state,state_size);
-		free(state);
-		state = new_state;
 		if(new_state == NULL) {
 			FATAL("Reallocing state failed");
 		}
+
+		INFO("Copying old state value to new state");
+		if(memcpy(new_state, state,state_size) == NULL) {
+			FATAL("Failed copying old state value to new state");
+		}
+		free(state);
+		state = new_state;
+		
 		INFO("Successfully reallocated state");
 
 		hr_main_t f = dlsym(handle,"hr_main");
 		if(f == NULL) FATAL("Unable to find 'hr_main' in watched file.\n[HELP] 'hr_main' function is the entry point for hot reloading, Similar to the normal 'main' function");
+
+		hr_before_recomp_t before_reload = dlsym(handle,"hr_before_reload");
+		if(before_reload) {
+			INFO("Found and running 'hr_before_reload'");
+			before_reload(state);
+		}else {
+			INFO("Did not find 'hr_before_reload'");
+		}
 
 
 		struct HrMainLoopParams *params = malloc(sizeof(struct HrMainLoopParams));
@@ -204,7 +196,6 @@ void* watch_and_auto_recompile(void* p) {
 			event = (struct inotify_event *)ptr;
 
 			if(strcmp(event->name,fname) != 0) continue;
-			printf("Event mask %X\n", event->mask);
 			recompile = 1;
 			break;
 		}
@@ -230,6 +221,7 @@ void* watch_and_auto_recompile(void* p) {
  * 
  */
 int main(int argc, char** argv) {
+
 
 	// TODO check if file is shared module or not
 
@@ -271,7 +263,8 @@ int main(int argc, char** argv) {
 		return 1;
 	}
 
-	int wd = inotify_add_watch(fd, dirname_, IN_MODIFY  | IN_MOVED_TO | IN_CLOSE_WRITE);
+//	int wd = inotify_add_watch(fd, dirname_, IN_MODIFY  | IN_MOVED_TO | IN_CLOSE_WRITE);
+	int wd = inotify_add_watch(fd, dirname_, IN_MODIFY  );
 	if(wd == -1) {
 		FATAL("Something went wrong in inotify_init(): %d\n",errno);
 		return 1;

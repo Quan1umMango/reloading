@@ -1,2 +1,6 @@
+CFLAGS := -fPIC -shared
+CC := gcc
+
 all:
-	gcc -o minimal minimal.c -fPIC -shared
+	$(CC) -o minimal minimal.c $(CFLAGS)
+	$(CC) -o rl rl.c $(CFLAGS) -lraylib
