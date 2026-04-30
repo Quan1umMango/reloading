@@ -17,7 +17,7 @@ const size_t HR_STATE_SIZE = sizeof(int);
 
 // This will be only once, when the hot-reloading code is first run. Use this to give default values to your state
 void hr_setup(void* state) {
-	*(int* )state = 10; // start form 1
+	*(int* )state = 1; // start form 1
 }
 
 
